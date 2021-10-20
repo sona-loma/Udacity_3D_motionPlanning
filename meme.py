@@ -164,28 +164,30 @@ class MotionPlanning(Drone):
 
         # TODO: read lat0, lon0 from colliders into floating point values
         import csv
-        with open('colliders.csv', newline='') as f:                    # how to read a single line from csv?
-             csv_reader = csv.reader(f)                                 # https://stackoverflow.com/questions/17262256/how-to-read-one-single-line-of-csv-data-in-python
-             csv_headings = next(csv_reader)
-             self.lat0 = float(csv_headings[0])
-             self.lon0 = float(csv_headings[1])
-        
+        with open('colliders.csv', newline='') as cfile:
+            csv_reader = csv.reader(cfile)
+            row_one = next(csv_reader)
+
         # TODO: set home position to (lon0, lat0, 0)
-             self.alti0 = 0
-             self.global_home(self.lat0, self.lon0, self.alti0)
+        latitude = row_one[0].strip('lat0')
+        longitude = row_one[1].strip(' lon0')
+        # convert string to float
+        latitude_f = float(latitude)
+        longitude_f = float(longitude)
+        print(latitude_f)
+        print(longitude_f)
+        self.set_home_position(longitude_f, latitude_f, 0.0)
+        print(self.global_home)
 
         # TODO: retrieve current global position
-             self.global_position(self.global_position[0],
-                                  self.global_position[1],
-                                  self.global_position[2])
+        global_position = (self._longitude, self._latitude, self._altitude)
+        print("global position is:", global_position)
 
         # TODO: convert to current local position using global_to_local()
-        import utm
-        (east_home, north_home, _, _) = utm.from_latlon(self.global_home[1], self.global_home[0])
-        (east, north, _, _) = utm.from_latlon(self.global_position[1], self.global_position[0])
-        self.local_position = np.array(
-            [north - north_home, east - east_home, -(self.global_position[2] - self.global_home[2])])  # north-east-down
-        print('global home {0}, position {1}, local position {2}'.format(self.global_home, self.global_position, self.local_position))
+        from global_to_local import global_to_local
+        local_position = global_to_local(global_position, self.global_home)
+        print('global home {0}, position {1}, local position {2}'.format(self.global_home, self.global_position,
+                                                                         self.local_position))
 
 
 
@@ -196,18 +198,29 @@ class MotionPlanning(Drone):
         grid, north_offset, east_offset = create_grid(data, TARGET_ALTITUDE, SAFETY_DISTANCE)
         print("North offset = {0}, east offset = {1}".format(north_offset, east_offset))
         # Define starting point on the grid (this is just grid center)
-        grid_start = (-north_offset, -east_offset)
+        #grid_start = (-north_offset, -east_offset)
         # TODO: convert start position to current position rather than map center
-
+        grid_start = (int(local_position[0]-north_offset), int(local_position[1]-east_offset))     #add int()
         # Set goal as some arbitrary position on the grid
-        grid_goal = (-north_offset + 10, -east_offset + 30)
-        # TODO: adapt to set goal as latitude / longitude position and convert
+        #grid_goal = (-north_offset - 10, -east_offset - 10)
 
+
+
+        # TODO: adapt to set goal as latitude / longitude position and convert
+        global_grid_goal = [37.795205, -122.397205, 0.0]
+        grid_goal = global_to_local(global_grid_goal, self.global_home)
+        grid_goal = (int(grid_goal[0]-north_offset), int(grid_goal[1]-east_offset))
+        print('Local Start and Goal: ', grid_start, grid_goal)
         # Run A* to find a path from start to goal
+
+
+
         # TODO: add diagonal motions with a cost of sqrt(2) to your A* implementation
         # or move to a different search space such as a graph (not done here)
-        print('Local Start and Goal: ', grid_start, grid_goal)
         path, _ = a_star(grid, heuristic, grid_start, grid_goal)
+
+
+
         # TODO: prune path to minimize number of waypoints
         # TODO (if you're feeling ambitious): Try a different approach altogether!
 
@@ -253,7 +266,7 @@ if __name__ == "__main__":
     parser.add_argument('--host', type=str, default='127.0.0.1', help="host address, i.e. '127.0.0.1'")
     args = parser.parse_args()
 
-    conn = MavlinkConnection('tcp:{0}:{1}'.format(args.host, args.port), timeout=60)
+    conn = MavlinkConnection('tcp:{0}:{1}'.format(args.host, args.port), timeout=600)
     drone = MotionPlanning(conn)                                                          #Here, we put our connection to the drone we used
     time.sleep(1)
 
